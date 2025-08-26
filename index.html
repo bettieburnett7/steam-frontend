@@ -44,20 +44,148 @@ try {
 const r = await fetch(path);
 if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
 const json = await r.json();
-out.textContent = JSON.stringify(json, null, 2);
-} catch (e) {
-out.textContent = 'Error: ' + e.message;
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Steam Profile Lookup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root { --bg:#0e1117; --card:#161b22; --accent:#2f81f7; --muted:#8b949e; --text:#c9d1d9; }
+* { box-sizing: border-box; }
+body {
+margin: 0; padding: 24px;
+background: var(--bg); color: var(--text);
+font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
+.container { max-width: 860px; margin: 0 auto; }
+h1 { margin: 0 0 20px; font-size: 28px; }
+.controls {
+display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+margin-bottom: 16px;
+}
+input[type="text"] {
+flex: 1 1 260px;
+background: var(--card); color: var(--text);
+border: 1px solid #30363d; border-radius: 8px;
+padding: 10px 12px; font-size: 16px;
+}
+button {
+background: var(--accent); color: white; border: none;
+padding: 10px 14px; border-radius: 8px; font-weight: 600;
+cursor: pointer;
+}
+button:disabled { opacity: .6; cursor: default; }
+.grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+.card {
+background: var(--card); border: 1px solid #30363d;
+border-radius: 12px; padding: 16px;
+}
+.profile { display: flex; gap: 12px; align-items: center; }
+.avatar {
+width: 72px; height: 72px; border-radius: 50%;
+background: #222; object-fit: cover;
+border: 1px solid #30363d;
+}
+.muted { color: var(--muted); font-size: 14px; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Steam Profile Lookup</h1>
+
+<div class="controls">
+<input id="steamid" type="text" placeholder="Enter Steam64 ID e.g. 7656…" />
+<button id="btnProfile">Get Profile</button>
+<button id="btnGames">Get Owned Games</button>
+<span id="status" class="muted"></span>
+</div>
+
+<div class="grid">
+<!-- Left: pretty profile card -->
+<div class="card">
+<div class="profile">
+<img id="avatar" class="avatar" alt="avatar">
+<div>
+<div id="personaname" style="font-size:18px;font-weight:700;">—</div>
+<div class="muted" id="realname"> </div>
+<div class="row">
+<a id="profileurl" href="#" target="_blank" rel="noopener">View Steam profile →</a>
+</div>
+</div>
+</div>
+<div style="margin-top:12px" class="muted" id="location"> </div>
+<div style="margin-top:12px">Owned games: <b id="gamecount">—</b></div>
+</div>
+
+<!-- Right: raw JSON (for debugging) -->
+<div class="card">
+<div class="muted" style="margin-bottom:8px">Raw response</div>
+<pre id="out">—</pre>
+</div>
+</div>
+</div>
+
+<script>
+// CHANGE THIS if your proxy URL is different:
+const BASE = 'https://steam-proxy-l78k.onrender.com';
+
+const $ = id => document.getElementById(id);
+const out = $('out'), status = $('status');
+let lastId = '';
+
+function setStatus(msg) { status.textContent = msg || ''; }
+function showJSON(obj) { out.textContent = JSON.stringify(obj, null, 2); }
+
+function fillProfileCard(player) {
+$('avatar').src = player.avatarmedium || player.avatarfull || '';
+$('personaname').textContent = player.personaname || '—';
+$('realname').textContent = player.realname || '';
+$('profileurl').href = player.profileurl || '#';
+// Location (country/state/city if present)
+const loc = [player.locstatecode, player.loccityid].filter(Boolean).join(' • ');
+$('location').textContent = (player.loccountrycode ? player.loccountrycode : '') + (loc ? ' • ' + loc : '');
 }
 
-document.getElementById('btnProfile').onclick = () => {
-const id = document.getElementById('steamid').value.trim();
-call(`${BASE}/steam/profile?steamid=${encodeURIComponent(id)}`);
+async function fetchJSON(url) {
+setStatus('Loading…');
+const r = await fetch(url);
+if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+const j = await r.json();
+setStatus('');
+return j;
+}
+
+async function getProfile(id) {
+const data = await fetchJSON(`${BASE}/steam/profile?steamid=${encodeURIComponent(id)}`);
+showJSON(data);
+const player = data?.response?.players?.[0];
+if (player) fillProfileCard(player);
+else setStatus('Profile not found or private.');
+}
+
+async function getGames(id) {
+const data = await fetchJSON(`${BASE}/steam/owned-games?steamid=${encodeURIComponent(id)}`);
+showJSON(data);
+const count = data?.response?.game_count;
+$('gamecount').textContent = (typeof count === 'number') ? count : '—';
+}
+
+$('btnProfile').onclick = async () => {
+const id = $('steamid').value.trim();
+if (!id) return setStatus('Please enter a Steam64 ID.');
+lastId = id;
+try { await getProfile(id); } catch (e) { setStatus('Error: ' + e.message); }
 };
 
-document.getElementById('btnGames').onclick = () => {
-const id = document.getElementById('steamid').value.trim();
-call(`${BASE}/steam/owned-games?steamid=${encodeURIComponent(id)}`);
+$('btnGames').onclick = async () => {
+const id = $('steamid').value.trim() || lastId;
+if (!id) return setStatus('Please enter a Steam64 ID.');
+try { await getGames(id); } catch (e) { setStatus('Error: ' + e.message); }
 };
 </script>
 </body>
