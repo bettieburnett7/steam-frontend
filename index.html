@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Steam Profile Lookup</title>
+<style>
+body {
+font-family: system-ui, sans-serif;
+max-width: 800px;
+margin: 40px auto;
+text-align: center;
+}
+input, button {
+font-size: 16px;
+padding: 8px;
+margin: 5px;
+}
+pre {
+background: #f6f8fa;
+padding: 12px;
+overflow: auto;
+text-align: left;
+}
+</style>
+</head>
+<body>
+<h1>Steam Profile Lookup</h1>
+<label>Steam64 ID:
+<input id="steamid" size="20" placeholder="7656…">
+</label>
+<button id="btnProfile">Get Profile</button>
+<button id="btnGames">Get Owned Games</button>
+
+<h2>Result</h2>
+<pre id="out">—</pre>
+
+<script>
+const BASE = 'https://steam-proxy-l78k.onrender.com';
+
+async function call(path) {
+const out = document.getElementById('out');
+out.textContent = 'Loading…';
+try {
+const r = await fetch(path);
+if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+const json = await r.json();
+out.textContent = JSON.stringify(json, null, 2);
+} catch (e) {
+out.textContent = 'Error: ' + e.message;
+}
+}
+
+document.getElementById('btnProfile').onclick = () => {
+const id = document.getElementById('steamid').value.trim();
+call(`${BASE}/steam/profile?steamid=${encodeURIComponent(id)}`);
+};
+
+document.getElementById('btnGames').onclick = () => {
+const id = document.getElementById('steamid').value.trim();
+call(`${BASE}/steam/owned-games?steamid=${encodeURIComponent(id)}`);
+};
+</script>
+</body>
+</html>
