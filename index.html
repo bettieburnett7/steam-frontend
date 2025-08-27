@@ -1,113 +1,66 @@
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>Steam Profile Lookup</title>
-<style>
-body {
-font-family: system-ui, sans-serif;
-background: #f6f8fa;
-max-width: 800px;
-margin: 40px auto;
-padding: 20px;
-}
-h1 {
-text-align: center;
-}
-.input-section {
-text-align: center;
-margin-bottom: 20px;
-}
-input, button {
-padding: 8px;
-font-size: 16px;
-margin: 5px;
-}
-.card {
-background: white;
-border-radius: 10px;
-padding: 20px;
-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-display: none;
-text-align: center;
-}
-.avatar {
-border-radius: 50%;
-width: 100px;
-height: 100px;
-}
-.username {
-font-size: 20px;
-font-weight: bold;
-margin: 10px 0;
-}
-.link {
-color: #0078ff;
-text-decoration: none;
-}
-</style>
-</head>
-<body>
-<h1>Steam Profile Lookup</h1>
-
-<div class="input-section">
-<label>Steam64 ID: <input id="steamid" size="20" placeholder="7656…"></label>
-<button id="btnProfile">Get Profile</button>
-<button id="btnGames">Get Owned Games</button>
-</div>
-
-<!-- Profile Card -->
-<div class="card" id="profileCard">
-<img id="avatar" class="avatar" src="" alt="Steam Avatar">
-<div id="username" class="username"></div>
-<a id="profileLink" class="link" target="_blank">View Steam Profile</a>
-<div id="gameCount"></div>
-</div>
-
-<!-- Debug output -->
-<h2>Result</h2>
-<pre id="out">—</pre>
-
 <script>
+// Your deployed proxy
 const BASE = 'https://steam-proxy-l78k.onrender.com';
+
+// Utility: escape JSON when injecting into HTML
+function escapeHtml(s) {
+return s.replace(/[&<>"']/g, m => ({
+'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+}[m]));
+}
 
 async function call(path) {
 const out = document.getElementById('out');
-const card = document.getElementById('profileCard');
 out.textContent = 'Loading…';
-card.style.display = 'none';
 
 try {
-const r = await fetch(path);
-if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-const json = await r.json();
-out.textContent = JSON.stringify(json, null, 2);
-
-// Show profile details if available
-if (json.response && json.response.players && json.response.players.length > 0) {
-const player = json.response.players[0];
-document.getElementById('avatar').src = player.avatarfull;
-document.getElementById('username').textContent = player.personaname;
-document.getElementById('profileLink').href = player.profileurl;
-card.style.display = 'block';
+const r = await fetch(path, { headers: { 'Accept': 'application/json' } });
+if (!r.ok) {
+const txt = await r.text().catch(() => '');
+throw new Error(`${r.status} ${r.statusText}${txt ? ' — ' + txt : ''}`);
 }
+const data = await r.json();
+
+// Pretty render profile
+if (path.includes('/steam/profile')) {
+const p = data?.response?.players?.[0];
+if (p) {
+out.innerHTML = `
+<div style="display:flex;gap:12px;align-items:center">
+<img src="${p.avatarmedium}" alt="" width="64" height="64">
+<div>
+<div style="font-weight:600">${p.personaname ?? ''}</div>
+<a href="${p.profileurl}" target="_blank" rel="noopener">Open Steam profile</a>
+</div>
+</div>
+<pre style="margin-top:12px">${escapeHtml(JSON.stringify(p, null, 2))}</pre>
+`;
+return;
+}
+}
+
+// Default: show full JSON
+out.textContent = JSON.stringify(data, null, 2);
 } catch (e) {
 out.textContent = 'Error: ' + e.message;
 }
 }
 
-document.getElementById('btnProfile').onclick = () => {
+// Attach event listeners
+document.getElementById('btnProfile').addEventListener('click', () => {
 const id = document.getElementById('steamid').value.trim();
+if (!id) { alert('Enter a Steam64 ID'); return; }
 call(`${BASE}/steam/profile?steamid=${encodeURIComponent(id)}`);
-};
+});
 
-document.getElementById('btnGames').onclick = () => {
+document.getElementById('btnGames').addEventListener('click', () => {
 const id = document.getElementById('steamid').value.trim();
+if (!id) { alert('Enter a Steam64 ID'); return; }
 call(`${BASE}/steam/owned-games?steamid=${encodeURIComponent(id)}`);
-};
+});
 </script>
-</body>
-</html>
+
+
 	
 
 
