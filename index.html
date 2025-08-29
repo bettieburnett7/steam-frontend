@@ -44,72 +44,88 @@ input, button { font-size: 16px; padding: 8px; }
 <pre id="out">—</pre>
 
 <script>
-// Your deployed proxy
-const BASE = 'https://steam-proxy-l78k.onrender.com';
+const BASE = 'https://steam-proxy-178k.onrender.com';
 
-// Utility: escape JSON when injecting into HTML
+// Escape HTML safely
 function escapeHTML(s) {
-return s.replace(/[<>&"']/g, m => (
-m === '&' ? '&amp;' : m === '<' ? '&lt;' : m === '>' ? '&gt;' :
-m === '"' ? '&quot;' : '&#39;'
-));
+return s.replace(/[<>&"']/g, m =>
+({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[m])
+);
 }
 
+// Core fetch + render
 async function call(path) {
 const out = document.getElementById('out');
 const card = document.getElementById('profileCard');
+const gamesContainer = document.getElementById('games');
+
 out.textContent = 'Loading…';
-card.style.display = 'none';
+if (card) card.style.display = 'none';
+if (gamesContainer) gamesContainer.innerHTML = '';
 
 try {
 const r = await fetch(path, { headers: { 'Accept': 'application/json' } });
-const txt = await r.text().catch(()=>'');
-if (!r.ok) throw new Error(`${r.status} ${r.statusText}${txt ? ' – ' + txt : ''}`);
-const data = await JSON.parse(txt);
+if (!r.ok) throw new Error(`HTTP ${r.status} - ${r.statusText}`);
+const data = await r.json();
 
-// Pretty render profile
+// ----- Profile -----
 if (path.includes('/steam/profile')) {
-const p = data?.response?.players?.[0];
+const p = data.response?.players?.[0];
 if (!p) throw new Error('No profile found');
-document.getElementById('avatar').src = p.avatarmedium || p.avatarfull || p.avatar;
-document.getElementById('username').textContent = p.personaname || '(unknown)';
+
+document.getElementById('avatar').src =
+p.avatarmedium || p.avatarfull || p.avatar || '';
+document.getElementById('username').textContent =
+p.personaname || '(unknown)';
 document.getElementById('profileLink').href = p.profileurl || '#';
+
 card.style.display = 'block';
 out.textContent = JSON.stringify(p, null, 2);
 return;
 }
 
-// Owned games summary
+// ----- Owned games -----
 if (path.includes('/steam/owned-games')) {
-const count = data?.response?.game_count ?? 0;
+const count = data.response?.game_count ?? 0;
 document.getElementById('gameCount').textContent = `Owned games: ${count}`;
-document.getElementById('profileCard').style.display = 'block';
+
+const games = data.response?.games || [];
+if (!games.length) {
+gamesContainer.innerHTML = '<p>No games found for this Steam account.</p>';
 out.textContent = JSON.stringify(data, null, 2);
 return;
 }
 
-// Default: show full JSON
+gamesContainer.innerHTML = games.map(g => `
+<div class="game">
+<img src="https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/header.jpg"
+alt="${escapeHTML(g.name)}" width="200">
+<p>${escapeHTML(g.name)}</p>
+</div>
+`).join('');
+
 out.textContent = JSON.stringify(data, null, 2);
+return;
+}
 } catch (e) {
-out.textContent = 'Error: ' + e.message;
+console.error(e);
+out.textContent = `Error: ${e.message}`;
 }
 }
 
-// Attach event listeners
+// ----- Buttons -----
 document.getElementById('btnProfile').addEventListener('click', () => {
 const id = document.getElementById('steamid').value.trim();
-if (!id) { alert('Enter a Steam64 ID'); return; }
+if (!id) return alert('Please enter a Steam64 ID!');
 call(`${BASE}/steam/profile?steamid=${encodeURIComponent(id)}`);
 });
 
 document.getElementById('btnGames').addEventListener('click', () => {
 const id = document.getElementById('steamid').value.trim();
-if (!id) { alert('Enter a Steam64 ID'); return; }
+if (!id) return alert('Please enter a Steam64 ID!');
 call(`${BASE}/steam/owned-games?steamid=${encodeURIComponent(id)}`);
 });
 </script>
-</body>
-</html>
 
 
 	
